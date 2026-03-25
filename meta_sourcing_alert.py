@@ -3,7 +3,7 @@ import os
 from datetime import datetime, timedelta
 
 # =====================
-# Secrets를 환경변수에서 읽어오기
+# 환경변수에서 읽어오기
 # =====================
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
@@ -34,45 +34,49 @@ def send_telegram(message):
         "chat_id": TELEGRAM_CHAT_ID,
         "text": message,
         "parse_mode": "HTML",
-        "disable_web_page_preview": False,
+        "disable_web_page_preview": True,
     }
     res = requests.post(url, json=payload)
-    print(f"텔레그램 전송 결과: {res.status_code} / {res.text}")
+    print(f"텔레그램 전송: {res.status_code}")
     return res.status_code
 
 # =====================
-# 메타 광고 라이브러리 조회
+# 메타 광고 라이브러리 조회 (사용자 토큰 방식)
 # =====================
 def fetch_meta_ads(keyword):
     url = "https://graph.facebook.com/v21.0/ads_archive"
     params = {
         "access_token": META_ACCESS_TOKEN,
-        "ad_reached_countries": "KR",
+        "ad_reached_countries": "['KR']",
         "search_terms": keyword,
         "ad_active_status": "ACTIVE",
-        "ad_delivery_date_min": (datetime.now() - timedelta(days=7)).strftime("%Y-%m-%d"),
         "fields": "id,ad_creation_time,ad_creative_bodies,ad_creative_link_captions,page_name",
-        "limit": 10,
+        "limit": 5,
     }
 
     res = requests.get(url, params=params)
-    print(f"[{keyword}] API 응답: {res.status_code}")
+    print(f"[{keyword}] 상태코드: {res.status_code}")
 
     if res.status_code != 200:
-        print(f"[{keyword}] 에러: {res.text}")
+        print(f"[{keyword}] 응답: {res.text[:200]}")
         return []
 
     data = res.json()
-    return data.get("data", [])
+    results = data.get("data", [])
+    print(f"[{keyword}] {len(results)}개 광고 발견")
+    return results
 
 # =====================
 # 메인 실행
 # =====================
 def main():
+    print("=" * 30)
     print("소싱 알리미 시작")
-    print(f"토큰 확인: {'OK' if TELEGRAM_BOT_TOKEN else 'MISSING'}")
-    print(f"채팅ID 확인: {'OK' if TELEGRAM_CHAT_ID else 'MISSING'}")
-    print(f"메타토큰 확인: {'OK' if META_ACCESS_TOKEN else 'MISSING'}")
+    print(f"실행시각: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"TELEGRAM_BOT_TOKEN: {'OK' if TELEGRAM_BOT_TOKEN else 'MISSING'}")
+    print(f"TELEGRAM_CHAT_ID: {'OK' if TELEGRAM_CHAT_ID else 'MISSING'}")
+    print(f"META_ACCESS_TOKEN: {'OK' if META_ACCESS_TOKEN else 'MISSING'}")
+    print("=" * 30)
 
     now = datetime.now().strftime("%Y-%m-%d %H:%M")
     all_results = []
@@ -80,8 +84,6 @@ def main():
 
     for keyword in KEYWORDS:
         ads = fetch_meta_ads(keyword)
-        print(f"[{keyword}] 광고 {len(ads)}개 발견")
-
         for ad in ads:
             page_name = ad.get("page_name", "알 수 없음")
             if page_name in seen_pages:
@@ -104,10 +106,11 @@ def main():
                 "created": created,
             })
 
-    print(f"총 {len(all_results)}개 결과")
+    print(f"총 {len(all_results)}개 결과 수집")
 
     if not all_results:
-        send_telegram(f"🔍 <b>[{now}] 소싱 알리미</b>\n\n신규 광고 없음")
+        msg = f"🔍 <b>[{now}] 소싱 알리미</b>\n\n오늘은 신규 광고 없음"
+        send_telegram(msg)
         return
 
     message = f"🔍 <b>[{now}] 소싱 알리미</b>\n"
@@ -116,8 +119,7 @@ def main():
 
     for r in all_results[:15]:
         message += f"🏷 <b>{r['page']}</b>\n"
-        message += f"🔑 키워드: {r['keyword']}\n"
-        message += f"📅 광고시작: {r['created']}\n"
+        message += f"🔑 {r['keyword']} | 📅 {r['created']}\n"
         message += f"📝 {r['body']}\n"
         message += f"🔗 {r['url']}\n\n"
 
