@@ -1,0 +1,29 @@
+name: 소싱 알리미 - 매일 11시 실행
+
+on:
+  schedule:
+    - cron: '0 2 * * *'  # UTC 02:00 = KST 11:00
+  workflow_dispatch:  # 수동 실행 버튼도 추가
+
+jobs:
+  run-alert:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 코드 가져오기
+        uses: actions/checkout@v3
+
+      - name: Python 설치
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: 라이브러리 설치
+        run: pip install requests
+
+      - name: 소싱 알리미 실행
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          META_ACCESS_TOKEN: ${{ secrets.META_ACCESS_TOKEN }}
+        run: python meta_sourcing_alert.py
